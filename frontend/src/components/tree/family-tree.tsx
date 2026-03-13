@@ -41,9 +41,10 @@ import {
 } from 'lucide-react';
 import type { Person } from '@/types';
 import type { TreeData } from '@/lib/supabase-data';
-import { exportTreeToPdf, getExportWarning } from '@/lib/pdf-export';
+import { exportTreeToPdf, exportFullGiaPha, getExportWarning } from '@/lib/pdf-export';
+import { useClanSettings } from '@/hooks/use-clan-settings';
 import Link from 'next/link';
-import { FileDown, Loader2 } from 'lucide-react';
+import { FileDown, BookText, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -701,9 +702,11 @@ export function FamilyTree() {
     ? data?.people.find((p) => p.id === filterRootId) ?? null
     : null;
 
+  const { data: clanSettings } = useClanSettings();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingFull, setIsExportingFull] = useState(false);
 
   // Track container size via ResizeObserver (avoids reading refs during render)
   const containerCallbackRef = useCallback((node: HTMLDivElement | null) => {
@@ -750,6 +753,28 @@ export function FamilyTree() {
       setIsExportingPdf(false);
     }
   }, [layout]);
+
+  // Full genealogy PDF export handler
+  const handleExportFullGiaPha = useCallback(async () => {
+    if (!containerRef.current || !layout || !data) return;
+    setIsExportingFull(true);
+    try {
+      await exportFullGiaPha(
+        containerRef.current,
+        layout.width,
+        layout.height,
+        layout.offsetX,
+        data,
+        clanSettings ?? null,
+      );
+      toast.success('Xuất Gia Phả PDF thành công');
+    } catch (err) {
+      console.error('[Full PDF export]', err);
+      toast.error('Lỗi khi xuất Gia Phả PDF. Vui lòng thử lại.');
+    } finally {
+      setIsExportingFull(false);
+    }
+  }, [layout, data, clanSettings]);
 
   // Handlers
   const handleZoomIn = () => setScale((s) => Math.min(s + 0.1, 2));
@@ -1050,13 +1075,14 @@ export function FamilyTree() {
           Minimap
         </Button>
 
-        {/* PDF export */}
+        {/* Tree-only PDF export */}
         <Button
           variant="ghost"
           size="sm"
           onClick={handleExportPdf}
-          disabled={isExportingPdf || !layout}
+          disabled={isExportingPdf || isExportingFull || !layout}
           className="hidden md:flex"
+          title="Xuất sơ đồ cây (PDF)"
         >
           {isExportingPdf ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1064,6 +1090,23 @@ export function FamilyTree() {
             <FileDown className="h-4 w-4 mr-2" />
           )}
           PDF
+        </Button>
+
+        {/* Full genealogy PDF export */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleExportFullGiaPha}
+          disabled={isExportingFull || isExportingPdf || !layout}
+          className="hidden md:flex"
+          title="Xuất đầy đủ Gia Phả (bìa + lịch sử + cây + lý lịch thành viên)"
+        >
+          {isExportingFull ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <BookText className="h-4 w-4 mr-2" />
+          )}
+          Xuất Gia Phả
         </Button>
 
         {/* Pan indicator */}
