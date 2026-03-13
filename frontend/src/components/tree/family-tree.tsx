@@ -41,8 +41,25 @@ import {
 } from 'lucide-react';
 import type { Person } from '@/types';
 import type { TreeData } from '@/lib/supabase-data';
-import { exportTreeToPdf, exportFullGiaPha, getExportWarning } from '@/lib/pdf-export';
+import {
+  exportTreeToPdf,
+  exportFullGiaPha,
+  getExportWarning,
+  DEFAULT_FULL_OPTIONS,
+  type FullGiaPhaOptions,
+} from '@/lib/pdf-export';
 import { useClanSettings } from '@/hooks/use-clan-settings';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { FileDown, BookText, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -707,6 +724,8 @@ export function FamilyTree() {
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingFull, setIsExportingFull] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportOptions, setExportOptions] = useState<FullGiaPhaOptions>(DEFAULT_FULL_OPTIONS);
 
   // Track container size via ResizeObserver (avoids reading refs during render)
   const containerCallbackRef = useCallback((node: HTMLDivElement | null) => {
@@ -754,9 +773,10 @@ export function FamilyTree() {
     }
   }, [layout]);
 
-  // Full genealogy PDF export handler
+  // Full genealogy PDF export — actual export after dialog confirm
   const handleExportFullGiaPha = useCallback(async () => {
     if (!containerRef.current || !layout || !data) return;
+    setShowExportDialog(false);
     setIsExportingFull(true);
     try {
       await exportFullGiaPha(
@@ -766,6 +786,7 @@ export function FamilyTree() {
         layout.offsetX,
         data,
         clanSettings ?? null,
+        exportOptions,
       );
       toast.success('Xuất Gia Phả PDF thành công');
     } catch (err) {
@@ -774,7 +795,7 @@ export function FamilyTree() {
     } finally {
       setIsExportingFull(false);
     }
-  }, [layout, data, clanSettings]);
+  }, [layout, data, clanSettings, exportOptions]);
 
   // Handlers
   const handleZoomIn = () => setScale((s) => Math.min(s + 0.1, 2));
@@ -1096,7 +1117,7 @@ export function FamilyTree() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleExportFullGiaPha}
+          onClick={() => setShowExportDialog(true)}
           disabled={isExportingFull || isExportingPdf || !layout}
           className="hidden md:flex"
           title="Xuất đầy đủ Gia Phả (bìa + lịch sử + cây + lý lịch thành viên)"
@@ -1246,6 +1267,124 @@ export function FamilyTree() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Export Gia Phả Dialog ─────────────────────────────────────────── */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookText className="h-5 w-5 text-amber-700" />
+              Xuất Gia Phả PDF
+            </DialogTitle>
+            <DialogDescription>
+              Chọn các phần muốn đưa vào tài liệu PDF.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Cover */}
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="opt-cover"
+                checked={exportOptions.includeCover}
+                onCheckedChange={(v) =>
+                  setExportOptions((o) => ({ ...o, includeCover: !!v }))
+                }
+              />
+              <div className="grid gap-0.5">
+                <Label htmlFor="opt-cover" className="font-medium cursor-pointer">
+                  Trang bìa
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Tên dòng họ, thủy tổ, năm thành lập, nguồn gốc
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* History */}
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="opt-history"
+                checked={exportOptions.includeHistory}
+                onCheckedChange={(v) =>
+                  setExportOptions((o) => ({ ...o, includeHistory: !!v }))
+                }
+              />
+              <div className="grid gap-0.5">
+                <Label htmlFor="opt-history" className="font-medium cursor-pointer">
+                  Lịch sử &amp; Nguồn gốc
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Mô tả, lịch sử dòng họ, sứ mệnh, nhà thờ họ
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Tree */}
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="opt-tree"
+                checked={exportOptions.includeTree}
+                onCheckedChange={(v) =>
+                  setExportOptions((o) => ({ ...o, includeTree: !!v }))
+                }
+              />
+              <div className="grid gap-0.5">
+                <Label htmlFor="opt-tree" className="font-medium cursor-pointer">
+                  Cây gia phả
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Sơ đồ phả hệ theo chiều ngang (A4 ngang)
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Biographies */}
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="opt-bio"
+                checked={exportOptions.includeBiographies}
+                onCheckedChange={(v) =>
+                  setExportOptions((o) => ({ ...o, includeBiographies: !!v }))
+                }
+              />
+              <div className="grid gap-0.5">
+                <Label htmlFor="opt-bio" className="font-medium cursor-pointer">
+                  Lý lịch thành viên
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Thông tin đầy đủ từng người, nhóm theo đời ({data?.people.length ?? 0} thành viên)
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+              Huỷ
+            </Button>
+            <Button
+              onClick={handleExportFullGiaPha}
+              disabled={
+                !exportOptions.includeCover &&
+                !exportOptions.includeHistory &&
+                !exportOptions.includeTree &&
+                !exportOptions.includeBiographies
+              }
+              className="bg-amber-700 hover:bg-amber-800 text-white"
+            >
+              <BookText className="h-4 w-4 mr-2" />
+              Xuất PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
